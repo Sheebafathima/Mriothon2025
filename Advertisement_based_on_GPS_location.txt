@@ -1,0 +1,147 @@
+#include <SoftwareSerial.h>
+#include <TinyGPS++.h>
+#include <LiquidCrystal_I2C.h>
+
+// Initialize the LCD with I2C address 0x27
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// GPS setup
+SoftwareSerial gpsSerial(5, 4);  // RX, TX
+TinyGPSPlus gps;
+float latitude, longitude;
+
+// IR sensor setup for people counter
+const int irPin1 = 2; // IR sensor 1(Entrance Detector) connected to digital pin 2
+const int irPin2 = 3; // IR sensor 2(Exit Detector) connected to digital pin 3
+int in_count = 0;        // Variable to store the number of people went inside
+int out_count = 0;       // Variable to store the number of people went outside
+int current_count = 0;   // Variable to store the current number of people present inside
+const unsigned long timeout = 50; // Object detection Timeout period in milliseconds
+
+// City lookup based on coordinates
+String getCity(float latitude, float longitude) {
+  // Simple city lookup based on known coordinates
+  if (latitude >= 12.38 && latitude <= 12.40 && longitude >= 76.64 && longitude <= 76.68) {
+    return "Mysore";
+  }
+  if (latitude >= 12.5 && latitude <= 12.55 && longitude >= 76.65 && longitude <= 76.70) {
+    return "Mandya";
+  }
+  if (latitude >= 12.37 && latitude <= 12.40 && longitude >= 76.60 && longitude <= 76.65) {
+    return "Srirangpatna";
+  }
+  if (latitude >= 12.98 && latitude <= 13.02 && longitude >= 77.55 && longitude <= 77.60) {
+    return "Bangalore";
+  }
+  if (latitude >= 12.70 && latitude <= 12.75 && longitude >= 76.25 && longitude <= 76.35) {
+    return "Hunsur";
+  }
+  if (latitude >= 12.62 && latitude <= 12.65 && longitude >= 76.68 && longitude <= 76.73) {
+    return "Nanjangud";
+  }
+  if (latitude >= 12.34 && latitude <= 12.37 && longitude >= 76.58 && longitude <= 76.62) {
+    return "T. Narasipur";
+  }
+  if (latitude >= 12.42 && latitude <= 12.45 && longitude >= 76.74 && longitude <= 76.77) {
+    return "Krishnarajasagara";
+  }
+  if (latitude >= 12.83 && latitude <= 12.85 && longitude >= 76.87 && longitude <= 76.90) {
+    return "Channarayapatna";
+  }
+  if (latitude >= 12.56 && latitude <= 12.60 && longitude >= 77.15 && longitude <= 77.20) {
+    return "Kollegal";
+  }
+  // Add more cities here as needed
+
+  return "Srirangpatna"; // Default city if unknown
+}
+
+void setup() {
+  // Initialize LCD
+  lcd.init();
+  lcd.backlight();
+  
+  // Initialize serial communication
+  gpsSerial.begin(9600);
+  Serial.begin(9600);
+  
+  // Display initial message on LCD
+  lcd.setCursor(0, 0);
+  lcd.print("IN: 0   OUT: 0");
+  lcd.setCursor(0, 1);
+  lcd.print("Current: 0");
+
+  // Set sensor pins as input
+  pinMode(irPin1, INPUT_PULLUP);
+  pinMode(irPin2, INPUT_PULLUP);
+}
+
+void loop() {
+  // People counting logic
+  if (digitalRead(irPin1) == LOW) {
+    unsigned long startTime = millis();
+    while ((millis() - startTime) < timeout) {
+      if (digitalRead(irPin2) == LOW) {
+        ++in_count;
+        updateDisplay();
+        break;
+      }
+    }
+    while (!digitalRead(irPin1) || !digitalRead(irPin2));
+  } else if (digitalRead(irPin2) == LOW) {
+    unsigned long startTime = millis();
+    while ((millis() - startTime) < timeout) {
+      if (digitalRead(irPin1) == LOW) {
+        if (out_count < in_count) {
+          ++out_count;
+          updateDisplay();
+          break;
+        }
+      }
+    }
+    while (!digitalRead(irPin1) || !digitalRead(irPin2));
+  }
+  
+  // GPS location fetch
+  while (gpsSerial.available()) {
+    int data = gpsSerial.read();
+    if (gps.encode(data)) {
+      latitude = gps.location.lat();
+      longitude = gps.location.lng();
+      Serial.print("Latitude: ");
+      Serial.println(latitude);
+      Serial.print("Longitude: ");
+      Serial.println(longitude);
+    }
+  }
+  
+  // Display city name every 5 seconds
+  static unsigned long lastCityUpdate = 0;
+  if (millis() - lastCityUpdate >= 5000) {  // 5000 ms = 5 seconds
+    lastCityUpdate = millis();
+    
+    // Get city name based on coordinates
+    String city = getCity(latitude, longitude);
+    lcd.setCursor(0, 1);
+    lcd.print("                ");  // Clear the current city display
+    lcd.setCursor(0, 1);
+    lcd.print(city + " Ad");  // Display city with "Ad"
+  }
+}
+
+void updateDisplay() {
+  lcd.setCursor(4, 0);
+  lcd.print("   ");
+  lcd.setCursor(4, 0);
+  lcd.print(in_count);
+  lcd.setCursor(13, 0);
+  lcd.print("   ");
+  lcd.setCursor(13, 0);
+  lcd.print(out_count);
+  
+  current_count = in_count - out_count;
+  lcd.setCursor(9, 1);
+  lcd.print("   ");
+  lcd.setCursor(9, 1);
+  lcd.print(current_count);
+}

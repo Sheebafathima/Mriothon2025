@@ -1,0 +1,136 @@
+#include <LiquidCrystal_I2C.h>
+
+// Initialize the LCD with I2C address 0x27 (16x2 LCD)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// IR sensor pins
+const int irPin1 = 2; // Entrance
+const int irPin2 = 3; // Exit
+
+int in_count = 0;       // Number of people entered
+int out_count = 0;      // Number of people exited
+int current_count = 0;  // Current number of people in the bus
+const unsigned long timeout = 50; // Timeout for IR sensors
+
+unsigned long lastCityDisplay = 0;
+const unsigned long cityDisplayInterval = 5000; // 5 seconds interval for displaying city
+
+// Store manually provided coordinates (latitude, longitude)
+float latitude = 12.30;  // Change this with the required latitude
+float longitude = 76.65; // Change this with the required longitude
+
+// Store last city name
+String currentCity = "Unknown";
+
+// -------------------- Setup --------------------
+void setup() {
+  // LCD Initialization
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("IN: 0   OUT: 0");
+  lcd.setCursor(0, 1);
+  lcd.print("Current: 0");
+
+  // IR sensor setup
+  pinMode(irPin1, INPUT_PULLUP);
+  pinMode(irPin2, INPUT_PULLUP);
+}
+
+// -------------------- Loop --------------------
+void loop() {
+  // IR Sensor Logic for counting people in and out
+  checkPeopleCount();
+
+  // Get city name based on hardcoded coordinates
+  if (millis() - lastCityDisplay >= cityDisplayInterval) {
+    currentCity = getCity(latitude, longitude);  // Get the city name based on latitude and longitude
+    displayCity(currentCity + " Ad");  // Display city with "Ad" suffix
+    lastCityDisplay = millis();
+  }
+}
+
+// -------------------- Functions --------------------
+
+// IR People Count Logic
+void checkPeopleCount() {
+  if (digitalRead(irPin1) == LOW) {
+    unsigned long startTime = millis();
+    while ((millis() - startTime) < timeout) {
+      if (digitalRead(irPin2) == LOW) {
+        ++in_count;
+        updateDisplay();
+        break;
+      }
+    }
+    while (!digitalRead(irPin1) || !digitalRead(irPin2));
+  }
+
+  else if (digitalRead(irPin2) == LOW) {
+    unsigned long startTime = millis();
+    while ((millis() - startTime) < timeout) {
+      if (digitalRead(irPin1) == LOW) {
+        if (out_count < in_count) {
+          ++out_count;
+          updateDisplay();
+          break;
+        }
+      }
+    }
+    while (!digitalRead(irPin1) || !digitalRead(irPin2));
+  }
+}
+
+// LCD Display Update
+void updateDisplay() {
+  current_count = in_count - out_count;
+
+  lcd.setCursor(4, 0);
+  lcd.print("   "); // clear previous value
+  lcd.setCursor(4, 0);
+  lcd.print(in_count);
+
+  lcd.setCursor(13, 0);
+  lcd.print("   ");
+  lcd.setCursor(13, 0);
+  lcd.print(out_count);
+
+  lcd.setCursor(9, 1);
+  lcd.print("     ");
+  lcd.setCursor(9, 1);
+  if (current_count > 30) {
+    lcd.print("Overload!!");
+  } else {
+    lcd.print(current_count);
+  }
+}
+
+// City Name Display
+void displayCity(String city) {
+  lcd.setCursor(0, 1);
+  lcd.print("                "); // Clear second row
+  lcd.setCursor(0, 1);
+  lcd.print(city);
+}
+
+// -------------------- City Name Detection --------------------
+// Manually set city based on latitude and longitude
+String getCity(float latitude, float longitude) {
+  // Round to 2 decimal places
+  float lat = round(latitude * 100) / 100.0;
+  float lon = round(longitude * 100) / 100.0;
+
+  if (lat == 12.30 && lon == 76.65) return "Mysore";
+  else if (lat == 12.52 && lon == 76.90) return "Mandya";
+  else if (lat == 12.42 && lon == 76.70) return "Srirangapatna";
+  else if (lat == 12.12 && lon == 76.68) return "Nanjangud";
+  else if (lat == 12.22 && lon == 76.90) return "T. Narasipura";
+  else if (lat == 12.30 && lon == 76.29) return "Hunsur";
+  else if (lat == 12.34 && lon == 76.10) return "Periyapatna";
+  else if (lat == 12.45 && lon == 76.35) return "K.R. Nagar";
+  else if (lat == 11.81 && lon == 76.69) return "Gundlupet";
+  else if (lat == 11.92 && lon == 76.94) return "Chamarajanagar";
+
+  // Default fallback for unknown coordinates
+  return "Unknown City";
+}
